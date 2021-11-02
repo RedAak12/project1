@@ -19,72 +19,133 @@ tidy=TRUE, tidy.opts=list(width.cutoff=60), R.options=list(max.print=100))
 
 ## Data Wrangling, Exploration, Visualization
 
-### Name and EID here
+Aakash Reddy / AVR683
 
 #### Introduction 
 
-Paragraph or two introducing your datasets and variables, why they are interesting to you, etc.
+Paragraph or two introducing your datasets and variables:
+These two datasets separately identify the air quality and mortality rates for 60 Metropolitan Statistical Areas (MSA). As someone interested in public health research, this relationship is important to study, particularly after a period of lax pollution standards. In the Air_quality dataset, the variables defining air quality are HC (Hydrocarbon pollution potential), NOX (Nitrous Oxide Pollution Potential), and SOX (sulphur dioxide pollution potential). In the Mortality Rates dataset (Dataset_2), the variables are POPN (MSA Population) and MORT(mortality rates per 100,000 people). This data was acquired from the Rutgers library at the address https://rucore.libraries.rutgers.edu/rutgers-lib/30861/. Overall, I expect to find an association between pollution potentials and greater mortality rate.
 
 ```{R}
-# read your datasets in here, e.g., with read_csv()
+library(readr)
+Air_Quality <- read_csv("Air_Quality.csv")
+read_csv("Air_Quality.csv")
+
+library(readr)
+Dataset_2 <- read_csv("Dataset_2.csv")
+read_csv("Dataset_2.csv")
 
 ```
 
 #### Tidying: Reshaping
 
-If your datasets are tidy already, demonstrate that you can reshape data with pivot wider/longer here (e.g., untidy and then retidy). Alternatively, it may be easier to wait until the wrangling section so you can reshape your summary statistics. Note here if you are going to do this.
+The data was reshaped using pivotlonger to untidy, then pivot_wider to retidy. As revealed by the dataset below, it is identical to the original dataset. Dataset 3 displays the untidy dataset, and dataset 4 displays the tidy version. 
 
 ```{R}
-# your tidying code (if applicable; can also wait until wrangling section)
+library(dplyr)
+library(tidyverse)
+Dataset_3 <- Dataset_2 %>% pivot_longer(1:3, names_to = "category", 
+    values_to = "count")
+Dataset_4 <- Dataset_3 %>% group_by(category) %>% mutate(row = row_number()) %>% 
+    tidyr::pivot_wider(names_from = "category", values_from = "count") %>% 
+    select(-row)
+Dataset_3
+Dataset_4
 ```
 
     
 #### Joining/Merging
 
 ```{R}
-# your joining code
-
-# your joining code
+Air_Quality %>% full_join(Dataset_2, by = "City #")
+Fullset <- Air_Quality %>% full_join(Dataset_2, by = "City #")
 ```
 
-Discussions of joining here. Feel encouraged to break up into more than once code chunk and discuss each in turn.
+Discussions of joining.
+
+This code was joined using full_join to add all non-matching columns into one complete dataset using the variable City # as the base. Prior to joining, there were 60 rows in both datasets and 4 columns in Air_Quality and 3 columns in Dataset_2. After joining, there are 60 rows and 6 columns, which is expected as no rows are supposed to be absent and the two datasets with 4 and 3 columns should add together into 6 total. There are no unique IDs in each dataset, and so all 60 MSA’s are the same in both datasets and can be joined using fulljoin successfully.
 
 ####  Wrangling
 
 ```{R}
-# your wrangling code
+#1
+Fullset %>% filter(SOX>60) %>% summarize(mean(MORT))
+Fullset %>% filter(SOX<60) %>% summarize(mean(MORT))
+#2
+Fullset %>% group_by(POPN) %>% summarize(NOX) %>% arrange(desc(NOX))
+#3
+Fullset %>% select( "Population in Millions" =POPN,"mortality Per 100,000 population"=MORT)
+#4 
+Fullset %>% mutate("Pop Adjusted Mortality"=(POPN/0.1)*MORT)
+#5
+Fullset %>% distinct(NOX) %>% summarize(sum(str_length(NOX)>2))
 
-# your wrangling code
+#6 (summary statistics -- first had to create new categorical variable)
+Fullset_categorical <- Fullset %>% mutate(SOX_high = case_when(SOX>60~TRUE,SOX<60~FALSE))
 
-# your wrangling code
+MedAbsDev <- function(x) median(abs(x - median(x)))
+
+Fullset_categorical %>% group_by(SOX_high) %>% summarize(mean(HC),median(HC), sd(HC), n(), n_distinct(HC), var(HC), min(HC), max(HC), quantile(HC), MedAbsDev(HC))
+
+Fullset_categorical %>% group_by(SOX_high) %>% summarize(mean(NOX),median(NOX), sd(NOX), n(), n_distinct(NOX), var(NOX), min(NOX), max(NOX), quantile(NOX))
+
+Fullset_categorical %>% summarize(mean(SOX),median(SOX), sd(SOX), n(), n_distinct(SOX), var(SOX), min(SOX), max(SOX), quantile(SOX))
+
+Fullset_categorical %>% summarize(mean(POPN),median(POPN), sd(POPN), n(), n_distinct(POPN), var(POPN), min(POPN), max(POPN), quantile(POPN))
+
+Fullset_categorical %>% summarize(mean(MORT),median(MORT), sd(MORT), n(), n_distinct(MORT), var(MORT), min(MORT), max(MORT), quantile(MORT))
+
+MORT <-Fullset_categorical %>% summarize(mean(MORT),median(MORT), sd(MORT), n(), n_distinct(MORT), var(MORT), min(MORT), max(MORT), quantile(MORT))
+
+MORT %>% knitr::kable()
+
+##7 --> Using a custom function, I find there are no NAs present in this dataset
+Fullset_categorical %>% summarize_all(function(x)sum(is.na(x)))
 ```
 
 Your discussion of wrangling section here. Feel encouraged to break up into more than once code chunk and discuss each in turn.
+
+For #1, since 60 is considered the threshold at which the sulfur Oxide pollution potential (ratio of pollutant in measured air) is considered high, I decided to summarize the mean mortality rate above and below using the filter(SOX>60) and the summarize(mean) functions. For #2, since prior research suggests high amounts of nitrous oxide have historically been associated with large numbers of people, I attempted to find if cities with the highest populations tended to have greater nitrous oxide. The results reveal that the cities with the highest nitrous oxide were actually lower in population than many with lower amounts. For #3, MORT and POPN were renamed using the select function to more accurately reflect their numerical ratios. For #4, the mutate function was used to generate a new column called Population adjusted mortality that informs on the total annual number of deaths per each city’s total population.For #5, since nitrous oxide is considered harmful to human health in double digits, I determined the number of cities where the nitrous oxide pollution potential dangerous due to being greater than double digits. This used the distinct function for NOX and the stringr function str_detect. For #6, each of the major summary statistics were performed for each numerical variable including mean, median, sd, n(), n_distinct, var(), min, max, and quantile. In this, 2 functions were grouped by a categorical variable (SOX_Danger). **Also –> The function I defined myself is MedAbsDev, used to calculate the median absolute deviation for HC pollution potential. Finally, the table style used kable was the summary statistics for the mortality rates. For #7, there are no NAs present in the dataset. To test this, a custom function was used to count the number of NAs in each column, which was found to be zero.
 
 
 #### Visualizing
 
 ```{R}
-# your plot 1
+ggplot(Fullset_categorical, aes(POPN, MORT, color = "Red")) + 
+    geom_point() + geom_smooth(method = "lm", color = "blue") + 
+    scale_x_continuous(breaks = seq(2.5, 4, 0.25)) + ggtitle("Relationship between Population and   Mortality Rates") + 
+    xlab("Population") + ylab("Mortality Rates") + theme_light()
 ```
 
-Your discussion of plot 1
+Your discussion of plot 1: Plot 1 identifies the relationship between population and mortality rates to determine if there appears to be any significant association between the two. According to the plot, there appears to be minimal to no real association between mortality rates and the population of the metropolitan statistical area.
 
 ```{R}
-# your plot 2
+ggplot(Fullset_categorical, aes(x = SOX_high, y = MORT, color = SOX_high)) + 
+    geom_bar(stat = "summary") + geom_errorbar(stat = "summary", 
+    width = 0.5) + scale_y_continuous(breaks = seq(0, 1000, 250)) + 
+    ggtitle("Relationship between Sulfur Oxide pollution Potential and Mortality Rates") + 
+    xlab("Sulfur Oxide Pollution Potential is High") + ylab("Mortality Rates") + 
+    theme_classic()
 ```
 
-Your discussion of plot 2
+Your discussion of plot 2: Plot 2 identifies the difference in mortality rates for cities with high and low sulfur oxide ratios. This is an important point of study since high sulfur oxide pollution potentials are associated with greater harm to human respiratory systems. According to the plot, there does appear to be an association between high sulfur oxide pollution potentials and greater mortality rates due to the lack of overlap between the error bars.
+
+In this plot, the normal number of tick marks was changed to break every 250 units as opposed to 200 to illustrate the difference in error bars more clearly.
 
 ```{R}
-# your plot 3
+ggplot(data = Fullset_categorical, aes(x = HC, y = MORT, color = SOX_high)) + 
+    geom_point(size = 4) + geom_line(aes(group = SOX_high)) + 
+    xlim(0, 150) + theme_minimal() + ggtitle("Relationship between Hydrocarbon pollution Potential and Mortality Rates") + 
+    xlab("Hydrocarbon Pollution Potential") + ylab("Mortality Rates")
 ```
 
-Your discussion of plot 3
+Your discussion of plot 3:
+
+Because the metropolitan statistical area are connected by being the closest one to the next position, a line plot is appropriate to capture the change in hydrocarbon pollution potential traveling across each MSA. According to the plot, there does not appear to be an association between distance to the next MSA and the as revealed by the numerous drastic changes in HC pollution potential across each MSA.
 
 #### Concluding Remarks
 
-If any!
+According to the results, higher pollution potentials are associated with greater mortality rates. Therefore, greater care should be taken in the future to address rising pollution rates in metropolitan areas.
 
 
 
